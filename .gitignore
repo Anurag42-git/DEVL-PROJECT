@@ -1,0 +1,42 @@
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# ---------- Environment ----------
+.env
+.env.local
+
+# ---------- Data (downloaded / regenerated, never committed) ----------
+data/raw/**
+!data/raw/.gitkeep
+!data/raw/README.md
+data/staging/
+data/curated/
+data/output/*
+!data/output/.gitkeep
+
+# ---------- Spark ----------
+spark-warehouse/
+metastore_db/
+derby.log
+*.crc
+
+# ---------- OS / editors ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+
+# ---------- Logs ----------
+logs/
+*.log

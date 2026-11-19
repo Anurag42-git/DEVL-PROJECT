@@ -1,0 +1,126 @@
+# =====================================================================
+# Experiment 11 - Transaction Anomaly and Refund Investigation
+# Central configuration. Every threshold used by the rule engine lives
+# here so that behaviour is auditable and reproducible.
+# =====================================================================
+
+project:
+  name: "Transaction Anomaly and Refund Investigation"
+  course: "DEVL - Semester 5"
+  seed: 42
+  timezone: "UTC"
+
+# ---------------------------------------------------------------------
+# Synthetic data generation (Experiment 1)
+# ---------------------------------------------------------------------
+generation:
+  window_days: 90
+  end_date: "2026-11-15"
+  customers: 4000
+  merchants: 600
+  devices: 5200
+  logical_transactions: 22000
+  # Anomaly injection rates. These drive the ground-truth file so that
+  # detection quality can be measured objectively.
+  injection:
+    retry_after_success_rate: 0.05     # duplicate successful charge (double-count trap)
+    retry_after_failure_rate: 0.55     # customer retries a declined payment
+    over_refund_rate: 0.06             # refunds sum above transaction amount
+    refund_on_declined_rate: 0.04      # refund attached to a never-captured txn
+    invalid_transition_rate: 0.004
+    duplicate_event_rate: 0.005
+    future_timestamp_rate: 0.003
+    negative_amount_rate: 0.002
+    orphan_refund_count: 30
+    orphan_reference_count: 40
+    currency_mismatch_rate: 0.005
+    refund_before_capture_rate: 0.005
+    high_velocity_customers: 25
+    repeated_failure_customers: 20
+    shared_devices: 12
+    high_refund_merchants: 8
+
+# ---------------------------------------------------------------------
+# Data quality (Experiment 2)
+# ---------------------------------------------------------------------
+quality:
+  max_null_fraction: 0.02
+  required_columns:
+    transactions: [txn_id, idempotency_key, customer_id, merchant_id, amount, currency, status, created_ts]
+    refunds: [refund_id, txn_id, amount, currency, status, requested_ts]
+    payment_status: [event_id, txn_id, status, event_ts]
+  allowed_currencies: ["USD", "EUR", "GBP", "INR"]
+  amount_min: 0.01
+  amount_max: 500000.00
+
+# ---------------------------------------------------------------------
+# Status state machine (validated in R004)
+# ---------------------------------------------------------------------
+status_machine:
+  INITIATED: [AUTHORIZED, DECLINED, FAILED, TIMEOUT]
+  AUTHORIZED: [CAPTURED, REVERSED, FAILED]
+  CAPTURED: [SETTLED, REVERSED]
+  SETTLED: [REVERSED]
+  DECLINED: []
+  FAILED: []
+  TIMEOUT: []
+  REVERSED: []
+
+# Refunds may only be raised against a transaction in these states.
+refundable_states: ["CAPTURED", "SETTLED"]
+
+# ---------------------------------------------------------------------
+# Indicator thresholds (R009-R012)
+# ---------------------------------------------------------------------
+indicators:
+  velocity:
+    window_minutes: 30
+    max_transactions: 6        # > this many txns in the window => R009
+    group_by: ["customer_id", "card_last4"]
+  failed_attempts:
+    window_minutes: 10
+    max_failures: 3            # >= this many declines in the window => R010
+  refund_ratio:
+    min_transactions: 10       # merchant needs volume before the ratio is meaningful
+    threshold: 0.35
+  shared_device:
+    customer_limit: 4          # one device used by > N customers => R012
+
+# ---------------------------------------------------------------------
+# Rule severities and outcomes (R008 - explainability)
+# NOTE: no rule ever outputs "fraud". Outcomes are review states only.
+# ---------------------------------------------------------------------
+severity:
+  R002: HIGH        # refund total exceeds transaction amount
+  R003: HIGH        # orphan refund
+  R004: HIGH        # illegal status transition
+  R005: MEDIUM      # refund before capture
+  R006: MEDIUM      # future timestamp
+  R007: HIGH        # non-positive amount
+  R008: LOW         # currency mismatch
+  R009: MEDIUM      # high velocity
+  R010: MEDIUM      # repeated failed attempts
+  R011: MEDIUM      # high merchant refund ratio
+  R012: LOW         # shared device
+  R013: HIGH        # refund on declined transaction
+  R014: MEDIUM      # orphan reference
+  R015: LOW         # duplicate event
+
+review_outcomes: ["PENDING", "CLEARED", "ESCALATED"]
+
+# ---------------------------------------------------------------------
+# Database (Experiments 5, 7, 8, 9)
+# ---------------------------------------------------------------------
+postgres:
+  schema: payment_monitor
+  ledger_table: reconciled_ledger
+  queue_table: review_queue
+  case_table: review_case
+  audit_table: audit_log
+
+mongo:
+  collections:
+    raw_events: raw_payment_events
+    device_summary: device_summary
+    anomaly_evidence: anomaly_evidence
+    case_notes: case_notes
