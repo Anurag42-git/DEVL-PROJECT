@@ -89,23 +89,34 @@ and ledgers.
 | `fact_refund` | one row per refund event (partial or full) |
 | `fact_payment_status` | lifecycle event stream (status transitions) |
 
-### The two traps this project exists to solve
+### The three traps this project exists to solve
 
-**1. Retries must not be double-counted.**
-A retry gets a *new* `txn_id` but keeps the original `idempotency_key`:
+All three are present in the real data — verified, not assumed.
+
+**1. Duplicate event records (the "retry" trap).**
+Online Retail II contains **34,335 duplicate invoice lines (3.2%)** — including a
+known sheet overlap for 1–9 Dec 2010. Loading naively with `SUM()` overstates
+revenue. The pipeline must collapse exact duplicates
+(`idempotency_key + amount + timestamp`) while *keeping* legitimate repeat lines.
+
+**2. Multi-leg payments must be summed, not deduplicated.**
+2,961 Olist orders were paid with 2+ instruments (up to 29 legs: vouchers +
+card). These legs are **additive** — verified: 99.4% sum exactly to the order
+total. A naive "one payment per order" rule understates collected revenue.
+The reconciliation must therefore *distinguish* a duplicate from a second leg:
 
 ```
-txn_id              idempotency_key   attempt_no   amount    status
-e481f5...-1          e481f5...         1            58.90     AUTHORIZED
-e481f5...-2          e481f5...         2            58.90     SETTLED
+order_id      leg   channel       amount
+...b3577b     1     credit_card     4.88
+...b3577b     2     voucher        40.46
+...b3577b     3     voucher        40.46
+              total = 85.80  == order total  (legitimate, keep all)
 ```
 
-`GROUP BY txn_id` and `SUM(amount)` therefore report **117.80 collected** when
-only **58.90** was ever collected. The ledger must reconcile on
-`idempotency_key`. Current data: **2,961 payment intents have more than one
-attempt**.
+264 orders have payments exceeding the order total and 39 have payments below
+it — those are genuine discrepancies the rules engine flags.
 
-**2. Partial refunds are additive and must be capped.**
+**3. Partial refunds are additive and must be capped.**
 Refunds are individual rows. Total refunded is their sum, capped at the
 transaction amount. Current data: **10,600 PARTIAL + 9,493 FULL** refunds.
 
@@ -168,9 +179,21 @@ fact_transaction           145,830   {'OLIST': 103,886, 'ONLINE_RETAIL_II': 41,9
 fact_refund                 22,980   {'ONLINE_RETAIL_II': 22,496, 'OLIST': 484}
 fact_payment_status        434,800
 
-payment intents with >1 attempt : 2,961 of 141,384
+payment intents with >1 leg     : 2,961 of 141,384
+total payment legs              : 145,830
 refund types                    : PARTIAL=10,600, FULL=9,493, UNKNOWN=2,887
 ```
+
+### Verified data characteristics
+
+| Finding | Value |
+|---|---|
+| Olist orders paid with 2+ instruments | 2,961 (up to 29 legs) |
+| Olist legs summing exactly to order total | 99.4% |
+| Olist payments exceeding order total | 264 |
+| Olist payments below order total | 39 |
+| Duplicate invoice lines in Online Retail II | 34,335 (3.2%) |
+| Genuine partial refunds recovered | 10,600 |
 
 ---
 

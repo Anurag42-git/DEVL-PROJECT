@@ -125,8 +125,8 @@ def main() -> int:
     if len(txn):
         dup = txn.groupby(["source_system", "idempotency_key"]).size()
         multi = (dup > 1).sum()
-        print(f"  payment intents with >1 attempt : {multi:,} of {len(dup):,}")
-        print(f"  total attempts                  : {len(txn):,}")
+        print(f"  payment intents with >1 leg     : {multi:,} of {len(dup):,}")
+        print(f"  total payment legs              : {len(txn):,}")
 
     if len(ref):
         print("  refund types                    : "

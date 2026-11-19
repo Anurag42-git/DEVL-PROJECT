@@ -155,11 +155,15 @@ def build(raw: Path) -> dict[str, pd.DataFrame]:
     attempt_no = txn["payment_sequential"]
     fact_transaction = conform(
         pd.DataFrame({
-            # a retry gets its own txn_id but keeps the order's idempotency key
+            # One row per payment LEG. Olist's payment_sequential is an index of
+            # instruments used for the SAME order (e.g. voucher + voucher + card),
+            # verified: 99.4% of orders have legs summing exactly to the order
+            # total. Legs are therefore ADDITIVE, not retries - summing is correct
+            # and taking the max would understate collected revenue.
             "txn_id": txn["order_id"] + "-" + attempt_no.astype(str),
             "idempotency_key": txn["order_id"],
             "attempt_no": attempt_no,
-            "retry_of_txn_id": (txn["order_id"] + "-1").where(attempt_no > 1, ""),
+            "retry_of_txn_id": "",
             "customer_id": txn["customer_id"],
             "merchant_id": txn["seller_id"],
             "device_id": "",
@@ -170,7 +174,10 @@ def build(raw: Path) -> dict[str, pd.DataFrame]:
             "card_last4": "",
             "created_ts": txn["order_purchase_timestamp"],
             "updated_ts": txn["updated_ts"],
-            "is_retry": attempt_no > 1,
+            # A second leg is not a retry. Genuine retries would carry the same
+            # idempotency_key AND the same amount; those are detected and
+            # collapsed during reconciliation, not asserted here.
+            "is_retry": False,
             "source_system": SOURCE,
         }),
         "fact_transaction",
