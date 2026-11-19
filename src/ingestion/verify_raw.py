@@ -127,7 +127,7 @@ SOURCES: list[tuple[str, str, list[FileSpec]]] = [
         [
             FileSpec(
                 "ieee_transactions", "ieee_cis/train_transaction.csv",
-                ["TransactionID", "TransactionDT", "TransactionAMT", "card1", "isFraud"],
+                ["TransactionID", "TransactionDT", "TransactionAmt", "card1", "isFraud"],
                 "590k card transactions with isFraud ground truth",
             ),
             FileSpec(

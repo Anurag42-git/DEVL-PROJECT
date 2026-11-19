@@ -44,7 +44,7 @@ real shape of a PSP's data landscape.
 |---|---|---|---|
 | **Olist Brazilian E-Commerce** | [Kaggle](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) | 99,441 orders · 3,095 sellers | customers, merchants, **order status lifecycle** (5 real timestamps), multi-attempt payments |
 | **Online Retail II** | [UCI](https://archive.ics.uci.edu/dataset/502/online+retail+ii) | 1,067,371 invoice lines | **authentic refunds** — 22,950 return lines, true partial refunds |
-| **IEEE-CIS Fraud Detection** | [Kaggle](https://www.kaggle.com/c/ieee-fraud-detection) | 590,540 transactions | **device fingerprints** + real `isFraud` labels for objective evaluation |
+| **IEEE-CIS Fraud Detection** | [Kaggle](https://www.kaggle.com/c/ieee-fraud-detection) | 590,540 transactions · 144,233 with identity | **device fingerprints** + real `isFraud` labels for objective evaluation |
 
 Verified inventory (run `python -m src.ingestion.verify_raw`):
 
@@ -52,7 +52,20 @@ Verified inventory (run `python -m src.ingestion.verify_raw`):
 olist/customers              99,441     olist/sellers                 3,095
 olist/orders                 99,441     olist/payments              103,886
 olist/items                 112,650     online_retail_II          1,067,371
+ieee/train_transaction      590,540     ieee/train_identity         144,233
 ```
+
+### What the labels actually say
+
+| Finding | Value |
+|---|---|
+| Fraud rate, all IEEE-CIS transactions | 3.499% (20,663 / 590,540) |
+| Fraud rate, transactions with device identity | 7.85% |
+| Fraud rate, device shared vs not shared | 7.91% vs 7.25% (**1.09×**) |
+
+The 2.2× gap is driven by **identity coverage**, not by device sharing. Device
+sharing alone is a weak standalone signal — which is precisely why the rule
+engine combines indicators rather than trusting any single rule.
 
 ### Why these three
 
@@ -172,15 +185,15 @@ python -m src.ingestion.build_canonical
 Expected output:
 
 ```
-dim_customer               105,323
-dim_merchant                 3,096
-dim_device                         0   (pending IEEE-CIS)
-fact_transaction           145,830   {'OLIST': 103,886, 'ONLINE_RETAIL_II': 41,944}
-fact_refund                 22,980   {'ONLINE_RETAIL_II': 22,496, 'OLIST': 484}
-fact_payment_status        434,800
+dim_customer               118,876
+dim_merchant                 3,097
+dim_device                   9,705   real composite device fingerprints
+fact_transaction           736,370   IEEE 590,540 | Olist 103,886 | OR-II 41,944
+fact_refund                 22,980   OR-II 22,496 | Olist 484
+fact_payment_status      1,025,340
+eval_labels                590,540   20,663 positives (3.499%) - evaluation only
 
-payment intents with >1 leg     : 2,961 of 141,384
-total payment legs              : 145,830
+payment intents with >1 leg     : 2,961 of 731,924
 refund types                    : PARTIAL=10,600, FULL=9,493, UNKNOWN=2,887
 ```
 
@@ -203,10 +216,10 @@ refund types                    : PARTIAL=10,600, FULL=9,493, UNKNOWN=2,887
 - [x] Dataset selection + verification tooling (`verify_raw`)
 - [x] Olist adapter → canonical model
 - [x] Online Retail II adapter → canonical model (as-of join for refund linkage)
+- [x] IEEE-CIS adapter → device fingerprints + `eval_labels` (leakage-isolated)
 - [x] Canonical build + Parquet caching (346s → 25s on re-run)
-- [ ] IEEE-CIS adapter — **blocked: competition rules not accepted yet**
 - [ ] Experiment 2 — data quality report
-- [ ] Reconciled ledger (retry collapse + refund capping)
+- [ ] Reconciled ledger (duplicate collapse + leg summing + refund capping)
 - [ ] Rule engine R001–R015 with evidence
 - [ ] PostgreSQL schema + load
 - [ ] MongoDB evidence store
@@ -219,8 +232,10 @@ refund types                    : PARTIAL=10,600, FULL=9,493, UNKNOWN=2,887
 
 | Gap | Source | Handling |
 |---|---|---|
-| No device info | Olist, Online Retail II | `device_id` empty; filled by IEEE-CIS |
+| No device info | Olist, Online Retail II | `device_id` empty; device coverage is 24.4% from IEEE-CIS |
 | No cancellation timestamp | Olist | `processed_ts` left null, reported in Exp 2 |
 | 243,007 rows missing Customer ID | Online Retail II | keyed as `ORII_UNKNOWN`, counted |
 | 2,887 refunds with no matching sale | Online Retail II | `refund_type = UNKNOWN`, reported not guessed |
 | No lifecycle stream | Online Retail II | only `INITIATED` is real; settlement not invented |
+| `DeviceInfo` is a family, not an ID | IEEE-CIS | composite fingerprint (family+OS+browser+resolution) |
+| `isFraud` is post-hoc truth | IEEE-CIS | isolated in `eval_labels`, never a feature |

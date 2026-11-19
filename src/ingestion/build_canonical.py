@@ -27,7 +27,7 @@ from pathlib import Path
 import pandas as pd
 
 from . import schema
-from .sources import olist, online_retail_ii
+from .sources import ieee_cis, olist, online_retail_ii
 
 ROOT = Path(__file__).resolve().parents[2]
 RAW = ROOT / "data" / "raw"
@@ -63,7 +63,7 @@ def main() -> int:
     print("=" * 74)
 
     # ---------------------------------------------------------------- Olist
-    print("\n[1/2] Olist ...", end=" ", flush=True)
+    print("\n[1/3] Olist ...", end=" ", flush=True)
     try:
         tables = olist.build(RAW)
         for name, df in tables.items():
@@ -75,9 +75,9 @@ def main() -> int:
 
     # ------------------------------------------------------ Online Retail II
     if args.skip_orii:
-        print("[2/2] Online Retail II ... skipped by flag")
+        print("[2/3] Online Retail II ... skipped by flag")
     else:
-        print("[2/2] Online Retail II (reading 1.07M rows) ...", end=" ", flush=True)
+        print("[2/3] Online Retail II (reading 1.07M rows) ...", end=" ", flush=True)
         try:
             tables, stats = online_retail_ii.build(RAW)
             for name, df in tables.items():
@@ -86,6 +86,19 @@ def main() -> int:
             print("ok")
         except FileNotFoundError as exc:
             print(f"SKIPPED ({exc})")
+
+    # ------------------------------------------------------------- IEEE-CIS
+    eval_labels: pd.DataFrame | None = None
+    print("[3/3] IEEE-CIS (device fingerprints + labels) ...", end=" ", flush=True)
+    try:
+        tables, stats = ieee_cis.build(RAW)
+        eval_labels = tables.pop("_eval_labels", None)
+        for name, df in tables.items():
+            collected[name].append(df)
+        source_stats["IEEE_CIS"] = stats
+        print("ok")
+    except FileNotFoundError as exc:
+        print(f"SKIPPED ({exc})")
 
     if not any(collected.values()):
         print("\nNo sources produced data. Run: python -m src.ingestion.verify_raw\n")
@@ -136,6 +149,17 @@ def main() -> int:
     written = schema.write_tables(final, STAGING, fmt="parquet")
     if args.csv:
         schema.write_tables(final, STAGING, fmt="csv")
+
+    if eval_labels is not None and len(eval_labels):
+        label_path = STAGING / "eval_labels.parquet"
+        eval_labels.to_parquet(label_path, index=False)
+        written["eval_labels"] = str(label_path)
+        print(
+            f"\n  eval_labels: {len(eval_labels):,} rows, "
+            f"{int(eval_labels['is_fraud'].sum()):,} positives "
+            f"({eval_labels['is_fraud'].mean()*100:.3f}%) "
+            "- ground truth for evaluation only, never a feature"
+        )
 
     print(f"\nWritten to {STAGING}:")
     for name, path in written.items():
