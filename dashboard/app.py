@@ -12,6 +12,7 @@ import streamlit as st
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "output"
+DEMO = ROOT / "data" / "demo"   # small REAL sample committed for hosting
 
 st.set_page_config(page_title="Transaction Monitoring", layout="wide")
 st.title("Transaction Anomaly & Refund Investigation")
@@ -19,13 +20,26 @@ st.caption("DEVL Semester 5 · Experiment 11 · real public datasets")
 
 
 @st.cache_data
-def load(name: str) -> pd.DataFrame:
-    path = OUT / f"{name}.parquet"
-    return pd.read_parquet(path) if path.exists() else pd.DataFrame()
+def load(name: str) -> tuple[pd.DataFrame, bool]:
+    """Prefer full pipeline output; fall back to the committed real sample."""
+    full = OUT / f"{name}.parquet"
+    if full.exists():
+        return pd.read_parquet(full), False
+    sample = DEMO / f"{name}.parquet"
+    if sample.exists():
+        return pd.read_parquet(sample), True
+    return pd.DataFrame(), False
 
 
-ledger = load("reconciled_ledger")
-queue = load("review_queue")
+ledger, using_sample = load("reconciled_ledger")
+queue, _ = load("review_queue")
+
+if using_sample:
+    st.info(
+        "Showing a small sample of real pipeline rows (the full outputs are "
+        "git-ignored). Run the pipeline locally to see all 731,924 intents."
+    )
+
 
 if ledger.empty:
     st.error("No ledger found. Run: python -m src.reconcile.ledger")
