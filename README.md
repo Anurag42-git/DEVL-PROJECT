@@ -245,6 +245,11 @@ python -m src.ingestion.verify_raw
 
 # 3. build the canonical staging tables
 python -m src.ingestion.build_canonical
+python -m src.quality.assess
+python -m src.reconcile.ledger
+python -m src.rules.engine
+python -m src.audit_report
+streamlit run dashboard/app.py
 ```
 
 Expected output:
@@ -284,13 +289,13 @@ refund types                    : PARTIAL=10,600, FULL=9,493, UNKNOWN=2,887
 - [x] Canonical build + Parquet caching (346s → 25s on re-run)
 - [x] **Experiment 2 — data quality report** (`docs/quality_report.md`)
 - [x] **Reconciled ledger** (`src/reconcile/ledger.py`)
-- [ ] Rule engine R001–R015 with evidence
-- [ ] PostgreSQL schema + load
-- [ ] MongoDB evidence store
-- [ ] FastAPI case CRUD
-- [ ] Streamlit dashboard
-- [ ] PySpark indicator job
-- [ ] Audit report
+- [x] Explainable rule engine + review queue
+- [ ] PostgreSQL schema + load (optional for demo)
+- [ ] MongoDB evidence store (optional for demo)
+- [ ] FastAPI case CRUD (optional for demo)
+- [x] Streamlit dashboard
+- [ ] PySpark indicator job (optional for demo)
+- [x] Audit report
 
 ### Known data gaps (measured, not hidden)
 
