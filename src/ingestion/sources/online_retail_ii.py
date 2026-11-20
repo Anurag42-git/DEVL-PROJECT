@@ -51,6 +51,16 @@ CURRENCY = "GBP"
 COUNTRY = "United Kingdom"
 MERCHANT_ID = "ORII_MAIN"
 
+# UCI's documentation warns that some StockCodes are not products. A return of
+# "AMAZONFEE" is a fee reversal, not a refunded product - and because these
+# codes recur for every customer, the as-of join matched dozens of unrelated
+# fee cancellations to one early invoice, producing fake 127k over-refunds.
+# Sales are kept (fees are real money); only the REFUND engine excludes them.
+NON_PRODUCT_CODES = {
+    "POST", "DOT", "M", "BANK CHARGES", "AMAZONFEE",
+    "C2", "D", "S", "B", "CRUK",
+}
+
 SHEET_DTYPES = {
     "Invoice": "string",
     "StockCode": "string",
@@ -126,9 +136,11 @@ def build(raw: Path) -> tuple[dict[str, pd.DataFrame], dict]:
     df, stats = _load(raw)
 
     sales = df[df["Quantity"] > 0].copy()
-    returns = df[df["Quantity"] < 0].copy()
+    all_returns = df[df["Quantity"] < 0].copy()
+    returns = all_returns[~all_returns["StockCode"].isin(NON_PRODUCT_CODES)].copy()
     stats["sale_lines"] = len(sales)
     stats["return_lines"] = len(returns)
+    stats["non_product_return_lines_excluded"] = len(all_returns) - len(returns)
     stats["cancellation_lines"] = int(df["is_cancellation"].sum())
 
     # ---------------------------------------------------------- dim_customer

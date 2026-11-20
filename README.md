@@ -199,6 +199,41 @@ produced a payment record.
 
 ---
 
+## Reconciled ledger (Experiment 4 / 7)
+
+`python -m src.reconcile.ledger` → `data/output/reconciled_ledger.{parquet,csv}`
+
+| Metric | Value |
+|---|---|
+| Payment legs in | 736,370 |
+| Exact duplicate rows dropped | 0 |
+| **Payment intents out** | **731,924** |
+| Multi-leg intents | 2,961 |
+| Intents with refunds | 8,612 |
+| Refund states | PARTIAL 6,766 · FULL 707 · **OVER 57** · NONE 724,394 |
+| Raw refund total | 795,668.59 |
+| **Capped refund total** | **620,696.18** |
+| Backward transitions | 1,369 intents |
+| Skipped transitions | 1,383 intents |
+| Olist amount mismatches | 303 |
+| **Intents needing review** | **1,720** |
+
+The cap removed **174,972.41** of refunds that exceeded what was collected.
+This is the concrete demonstration of "reconcile without double-counting
+partial refunds".
+
+> **Caveat (documented, not hidden):** Online Retail II has no explicit
+> "refund of invoice X" column. The refund→transaction link is reconstructed
+> with an *as-of join* on (customer, stock code). It is usually right — e.g.
+> cancellation `C508132` maps to sale `508096`, 36 invoices earlier — but some
+> cancellation invoices exceed the matched sale because one cancellation spans
+> several purchases. The 57 `OVER` flags are therefore **provisional review
+> candidates**, not confirmed defects. Non-product stock codes (`AMAZONFEE`,
+> `POST`, `M`, …) were excluded from refund matching after they created fake
+> 127k over-refunds.
+
+---
+
 ## Quick start
 
 ```powershell
@@ -248,7 +283,7 @@ refund types                    : PARTIAL=10,600, FULL=9,493, UNKNOWN=2,887
 - [x] IEEE-CIS adapter → device fingerprints + `eval_labels` (leakage-isolated)
 - [x] Canonical build + Parquet caching (346s → 25s on re-run)
 - [x] **Experiment 2 — data quality report** (`docs/quality_report.md`)
-- [ ] Reconciled ledger (duplicate collapse + leg summing + refund capping)
+- [x] **Reconciled ledger** (`src/reconcile/ledger.py`)
 - [ ] Rule engine R001–R015 with evidence
 - [ ] PostgreSQL schema + load
 - [ ] MongoDB evidence store
@@ -268,3 +303,4 @@ refund types                    : PARTIAL=10,600, FULL=9,493, UNKNOWN=2,887
 | No lifecycle stream | Online Retail II | only `INITIATED` is real; settlement not invented |
 | `DeviceInfo` is a family, not an ID | IEEE-CIS | composite fingerprint (family+OS+browser+resolution) |
 | `isFraud` is post-hoc truth | IEEE-CIS | isolated in `eval_labels`, never a feature |
+| No explicit refund→txn link | Online Retail II | as-of join; 57 `OVER` flags are provisional review candidates |
