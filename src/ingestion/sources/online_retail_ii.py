@@ -230,12 +230,19 @@ def build(raw: Path) -> tuple[dict[str, pd.DataFrame], dict]:
 
     stats["refund_type_counts"] = refund_type.value_counts().to_dict()
 
+    # (Invoice, StockCode) is not unique - the same product can be returned on
+    # two separate lines of one cancellation invoice. Add an occurrence index so
+    # refund_id is a real primary key.
+    line_key = matched["Invoice"].astype("string") + "_" + matched["StockCode"].astype("string")
+    occurrence = line_key.groupby(line_key).cumcount()
+
     fact_refund = conform(
         pd.DataFrame({
-            "refund_id": "ORII_" + matched["Invoice"].astype("string") + "_" + matched["StockCode"].astype("string"),
-            # the invoice the money originally came from; falls back to the
-            # cancellation invoice itself when no sale could be matched
-            "txn_id": matched["sale_invoice"].fillna(matched["Invoice"]),
+            "refund_id": "ORII_" + line_key + "_" + occurrence.astype("string"),
+            # the invoice the money originally came from. Left EMPTY when no
+            # sale could be matched - inventing a reference would hide a real
+            # data gap, so it is reported instead.
+            "txn_id": matched["sale_invoice"].fillna(""),
             "customer_id": matched["customer_id"],
             "merchant_id": MERCHANT_ID,
             "amount": (returned * matched["Price"].abs()).round(2),

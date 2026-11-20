@@ -169,6 +169,36 @@ data/raw/ ──► src/ingestion/ ──► data/staging/ ──► src/reconci
 
 ---
 
+## Quality snapshot (Experiment 2)
+
+`python -m src.quality.assess` → `docs/quality_report.md`
+
+| Severity | Findings |
+|---|---|
+| HIGH | 4 |
+| MEDIUM | 2 |
+| INFO | 17 |
+| OK | 12 |
+
+The four high-severity defects, all genuine:
+
+| Finding | Value | Meaning |
+|---|---|---|
+| Refunds exceeding the transaction | **153** | refunded more than was ever collected |
+| Backward status transitions | **1,382** | lifecycle moved to an *earlier* state — timestamps contradict the process |
+| Non-positive transaction amounts | **1,875** | zero-price invoices (free items aggregated to 0) |
+| Orphan refund → customer | **128** | refund for a customer absent from the dimension |
+
+Plus **2,520 skipped transitions** (a missing intermediate timestamp makes a
+legitimate jump look illegal) and **320** status events for orders that never
+produced a payment record.
+
+> Deliberately **not** counted as defects: 615 legs sharing the same intent,
+> amount and timestamp. These are legitimate identical vouchers, and treating
+> them as duplicates would wrongly erase real money.
+
+---
+
 ## Quick start
 
 ```powershell
@@ -198,7 +228,6 @@ refund types                    : PARTIAL=10,600, FULL=9,493, UNKNOWN=2,887
 ```
 
 ### Verified data characteristics
-
 | Finding | Value |
 |---|---|
 | Olist orders paid with 2+ instruments | 2,961 (up to 29 legs) |
@@ -218,7 +247,7 @@ refund types                    : PARTIAL=10,600, FULL=9,493, UNKNOWN=2,887
 - [x] Online Retail II adapter → canonical model (as-of join for refund linkage)
 - [x] IEEE-CIS adapter → device fingerprints + `eval_labels` (leakage-isolated)
 - [x] Canonical build + Parquet caching (346s → 25s on re-run)
-- [ ] Experiment 2 — data quality report
+- [x] **Experiment 2 — data quality report** (`docs/quality_report.md`)
 - [ ] Reconciled ledger (duplicate collapse + leg summing + refund capping)
 - [ ] Rule engine R001–R015 with evidence
 - [ ] PostgreSQL schema + load
