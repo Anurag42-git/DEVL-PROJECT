@@ -1,9 +1,13 @@
 """
-Create a small REAL sample for the hosted dashboard.
+Build a small, REPRESENTATIVE real-data sample for the hosted dashboard.
 
-The full outputs are git-ignored (they contain hundreds of thousands of rows).
-Streamlit Community Cloud clones only the repo, so it needs a small committed
-sample. These are actual rows from the pipeline, not invented data.
+The full outputs are git-ignored (hundreds of MB). Streamlit Community Cloud
+clones only the repo, so it needs a committed sample. These are ACTUAL rows
+from the pipeline - nothing is invented.
+
+Sample design: take a RANDOM set of payment intents, then keep every flag that
+belongs to them. This preserves real proportions (the previous version kept
+all HIGH/MEDIUM flags, which made ~87% of the sample look flagged).
 
 Run: python -m src.make_demo
 """
@@ -15,6 +19,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "output"
 DEMO = ROOT / "data" / "demo"
+DOCS = ROOT / "docs"
 
 
 def main() -> None:
@@ -23,31 +28,35 @@ def main() -> None:
     ledger = pd.read_parquet(OUT / "reconciled_ledger.parquet")
     queue = pd.read_parquet(OUT / "review_queue.parquet")
 
-    # keep every HIGH flag + a random spread of the rest
-    high = queue[queue["severity"].isin(["HIGH", "MEDIUM"])]
-    other = queue.sample(n=min(3000, len(queue)), random_state=42)
-    demo_q = (
-        pd.concat([high, other])
-        .drop_duplicates("flag_id")
-        .sample(frac=1, random_state=42)
-    )
+    # random, representative sample of payment intents
+    n = min(8000, len(ledger))
+    demo_l = ledger.sample(n=n, random_state=7).reset_index(drop=True)
 
-    # keep every intent referenced by those flags + a random spread
-    ids = set(demo_q.loc[demo_q["payment_intent_id"] != "", "payment_intent_id"])
-    linked = ledger[ledger["payment_intent_id"].isin(ids)]
-    extra = ledger.sample(n=min(3000, len(ledger)), random_state=42)
-    demo_l = (
-        pd.concat([linked, extra])
-        .drop_duplicates("payment_intent_id")
-        .sample(frac=1, random_state=42)
-    )
+    # only flags attached to those intents
+    demo_q = queue[queue["payment_intent_id"].isin(set(demo_l["payment_intent_id"]))]
+    demo_q = demo_q.reset_index(drop=True)
 
     demo_l.to_parquet(DEMO / "reconciled_ledger.parquet", index=False)
     demo_q.to_parquet(DEMO / "review_queue.parquet", index=False)
 
-    for p in sorted(DEMO.glob("*.parquet")):
+    # reports shown in the dashboard's Data Quality / Audit Report sections
+    for name in ("quality_report.json", "reconciliation_report.json", "rule_summary.json"):
+        src = OUT / name
+        if src.exists():
+            (DEMO / name).write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+
+    audit = DOCS / "audit_report.md"
+    if audit.exists():
+        (DEMO / "audit_report.md").write_text(
+            audit.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+
+    for p in sorted(DEMO.iterdir()):
         print(f"{p.relative_to(ROOT)}  {p.stat().st_size / 1024:.0f} KB")
-    print(f"ledger rows: {len(demo_l):,} | queue rows: {len(demo_q):,}")
+    print(
+        f"\nledger rows: {len(demo_l):,} | flags: {len(demo_q):,} "
+        f"({len(demo_q) / len(demo_l) * 100:.1f} flags per 100 intents)"
+    )
 
 
 if __name__ == "__main__":

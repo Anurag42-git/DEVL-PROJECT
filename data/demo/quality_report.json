@@ -1,0 +1,391 @@
+{
+  "generated_at": "2026-11-20T02:39:24Z",
+  "tables": {
+    "dim_customer": {
+      "rows": 118876,
+      "columns": 7
+    },
+    "dim_merchant": {
+      "rows": 3097,
+      "columns": 7
+    },
+    "dim_device": {
+      "rows": 9705,
+      "columns": 10
+    },
+    "fact_transaction": {
+      "rows": 736370,
+      "columns": 16
+    },
+    "fact_refund": {
+      "rows": 21828,
+      "columns": 12
+    },
+    "fact_payment_status": {
+      "rows": 1025340,
+      "columns": 8
+    }
+  },
+  "summary": {
+    "HIGH": 4,
+    "MEDIUM": 2,
+    "INFO": 17,
+    "OK": 12
+  },
+  "findings": [
+    {
+      "dimension": "completeness",
+      "table": "dim_customer",
+      "column": "city",
+      "metric": "null_count",
+      "value": 19435,
+      "fraction": 0.1635,
+      "severity": "INFO",
+      "detail": "16.35% null by design - card-network customers have no city"
+    },
+    {
+      "dimension": "completeness",
+      "table": "dim_customer",
+      "column": "state",
+      "metric": "null_count",
+      "value": 19435,
+      "fraction": 0.1635,
+      "severity": "INFO",
+      "detail": "16.35% null by design - card-network customers have no state"
+    },
+    {
+      "dimension": "completeness",
+      "table": "dim_customer",
+      "column": "zip_prefix",
+      "metric": "null_count",
+      "value": 19435,
+      "fraction": 0.1635,
+      "severity": "INFO",
+      "detail": "16.35% null by design - card-network customers have no postcode"
+    },
+    {
+      "dimension": "completeness",
+      "table": "dim_customer",
+      "column": "country",
+      "metric": "null_count",
+      "value": 1487,
+      "fraction": 0.0125,
+      "severity": "INFO",
+      "detail": "1.25% null (1,487 of 118,876)"
+    },
+    {
+      "dimension": "completeness",
+      "table": "dim_merchant",
+      "column": "city",
+      "metric": "null_count",
+      "value": 2,
+      "fraction": 0.0006,
+      "severity": "INFO",
+      "detail": "0.06% null (2 of 3,097)"
+    },
+    {
+      "dimension": "completeness",
+      "table": "dim_merchant",
+      "column": "state",
+      "metric": "null_count",
+      "value": 2,
+      "fraction": 0.0006,
+      "severity": "INFO",
+      "detail": "0.06% null (2 of 3,097)"
+    },
+    {
+      "dimension": "completeness",
+      "table": "dim_merchant",
+      "column": "country",
+      "metric": "null_count",
+      "value": 1,
+      "fraction": 0.0003,
+      "severity": "INFO",
+      "detail": "0.03% null (1 of 3,097)"
+    },
+    {
+      "dimension": "completeness",
+      "table": "dim_device",
+      "column": "os_version",
+      "metric": "null_count",
+      "value": 4294,
+      "fraction": 0.4425,
+      "severity": "INFO",
+      "detail": "44.25% null by design - id_30 (OS) is missing for some fingerprints"
+    },
+    {
+      "dimension": "completeness",
+      "table": "dim_device",
+      "column": "ip_country",
+      "metric": "null_count",
+      "value": 9705,
+      "fraction": 1.0,
+      "severity": "INFO",
+      "detail": "100.00% null by design - IEEE-CIS exposes no IP country"
+    },
+    {
+      "dimension": "completeness",
+      "table": "fact_transaction",
+      "column": "merchant_id",
+      "metric": "null_count",
+      "value": 830,
+      "fraction": 0.0011,
+      "severity": "INFO",
+      "detail": "0.11% null (830 of 736,370)"
+    },
+    {
+      "dimension": "completeness",
+      "table": "fact_refund",
+      "column": "merchant_id",
+      "metric": "null_count",
+      "value": 23,
+      "fraction": 0.0011,
+      "severity": "INFO",
+      "detail": "0.11% null (23 of 21,828)"
+    },
+    {
+      "dimension": "completeness",
+      "table": "fact_refund",
+      "column": "processed_ts",
+      "metric": "null_count",
+      "value": 21828,
+      "fraction": 1.0,
+      "severity": "INFO",
+      "detail": "100.00% null by design - no source provides a refund processing timestamp"
+    },
+    {
+      "dimension": "completeness",
+      "table": "fact_payment_status",
+      "column": "latency_ms",
+      "metric": "null_count",
+      "value": 1025340,
+      "fraction": 1.0,
+      "severity": "INFO",
+      "detail": "100.00% null by design - latency is not present in any source"
+    },
+    {
+      "dimension": "uniqueness",
+      "table": "fact_transaction",
+      "column": "*",
+      "metric": "exact_duplicate_rows",
+      "value": 0,
+      "fraction": 0.0,
+      "severity": "OK",
+      "detail": "byte-identical rows - the true double-counting defect"
+    },
+    {
+      "dimension": "uniqueness",
+      "table": "fact_transaction",
+      "column": "idempotency_key+amount+created_ts",
+      "metric": "identical_legs",
+      "value": 615,
+      "severity": "INFO",
+      "detail": "distinct legs sharing intent, amount and timestamp - legitimate multi-instrument payments (e.g. two identical vouchers), not duplicates"
+    },
+    {
+      "dimension": "uniqueness",
+      "table": "fact_transaction",
+      "column": "txn_id",
+      "metric": "duplicate_primary_key",
+      "value": 0,
+      "severity": "OK",
+      "detail": "txn_id must be unique"
+    },
+    {
+      "dimension": "uniqueness",
+      "table": "fact_refund",
+      "column": "refund_id",
+      "metric": "duplicate_primary_key",
+      "value": 0,
+      "severity": "OK",
+      "detail": "refund_id must be unique"
+    },
+    {
+      "dimension": "uniqueness",
+      "table": "fact_payment_status",
+      "column": "txn_id+status+event_ts",
+      "metric": "duplicate_events",
+      "value": 0,
+      "fraction": 0.0,
+      "severity": "OK",
+      "detail": "the same lifecycle event recorded more than once"
+    },
+    {
+      "dimension": "referential_integrity",
+      "table": "fact_transaction",
+      "column": "customer_id",
+      "parent": "dim_customer.customer_id",
+      "metric": "orphan_references",
+      "value": 0,
+      "fraction": 0.0,
+      "checked": 736370,
+      "severity": "OK",
+      "detail": "0 of 736,370 supplied references have no parent row"
+    },
+    {
+      "dimension": "referential_integrity",
+      "table": "fact_transaction",
+      "column": "merchant_id",
+      "parent": "dim_merchant.merchant_id",
+      "metric": "orphan_references",
+      "value": 0,
+      "fraction": 0.0,
+      "checked": 735540,
+      "severity": "OK",
+      "detail": "0 of 735,540 supplied references have no parent row"
+    },
+    {
+      "dimension": "referential_integrity",
+      "table": "fact_refund",
+      "column": "txn_id",
+      "parent": "fact_transaction.txn_id",
+      "metric": "orphan_references",
+      "value": 0,
+      "fraction": 0.0,
+      "checked": 19467,
+      "severity": "OK",
+      "detail": "0 of 19,467 supplied references have no parent row"
+    },
+    {
+      "dimension": "referential_integrity",
+      "table": "fact_refund",
+      "column": "customer_id",
+      "parent": "dim_customer.customer_id",
+      "metric": "orphan_references",
+      "value": 96,
+      "fraction": 0.004398,
+      "checked": 21828,
+      "severity": "HIGH",
+      "detail": "96 of 21,828 supplied references have no parent row"
+    },
+    {
+      "dimension": "referential_integrity",
+      "table": "fact_refund",
+      "column": "merchant_id",
+      "parent": "dim_merchant.merchant_id",
+      "metric": "orphan_references",
+      "value": 0,
+      "fraction": 0.0,
+      "checked": 21805,
+      "severity": "OK",
+      "detail": "0 of 21,805 supplied references have no parent row"
+    },
+    {
+      "dimension": "referential_integrity",
+      "table": "fact_payment_status",
+      "column": "txn_id",
+      "parent": "fact_transaction.txn_id",
+      "metric": "orphan_references",
+      "value": 320,
+      "fraction": 0.000312,
+      "checked": 1025340,
+      "severity": "MEDIUM",
+      "detail": "320 of 1,025,340 supplied references have no parent row"
+    },
+    {
+      "dimension": "amount_validity",
+      "table": "fact_transaction",
+      "column": "amount",
+      "metric": "non_positive_amounts",
+      "value": 1875,
+      "severity": "HIGH",
+      "detail": "zero or negative transaction amounts"
+    },
+    {
+      "dimension": "amount_validity",
+      "table": "fact_transaction",
+      "column": "amount",
+      "metric": "out_of_range_amounts",
+      "value": 0,
+      "severity": "OK",
+      "detail": "outside declared range [0.01, 500000.0]"
+    },
+    {
+      "dimension": "amount_validity",
+      "table": "fact_refund",
+      "column": "amount",
+      "metric": "refunds_exceeding_transaction",
+      "value": 73,
+      "severity": "HIGH",
+      "detail": "transactions whose summed refunds exceed the amount collected"
+    },
+    {
+      "dimension": "timestamp_validity",
+      "table": "fact_transaction",
+      "column": "created_ts/updated_ts",
+      "metric": "updated_before_created",
+      "value": 0,
+      "severity": "OK",
+      "detail": "updated_ts earlier than created_ts"
+    },
+    {
+      "dimension": "timestamp_validity",
+      "table": "fact_transaction",
+      "column": "created_ts",
+      "metric": "future_dated",
+      "value": 0,
+      "severity": "OK",
+      "detail": "transaction timestamped in the future"
+    },
+    {
+      "dimension": "timestamp_validity",
+      "table": "fact_refund",
+      "column": "requested_ts",
+      "metric": "refund_before_transaction",
+      "value": 0,
+      "severity": "OK",
+      "detail": "refund timestamped before the transaction existed"
+    },
+    {
+      "dimension": "status_transitions",
+      "table": "fact_payment_status",
+      "column": "status",
+      "metric": "backward_transitions",
+      "value": 1382,
+      "fraction": 0.00471,
+      "severity": "HIGH",
+      "detail": "lifecycle moved to an EARLIER state - timestamps contradict the process"
+    },
+    {
+      "dimension": "status_transitions",
+      "metric": "top_backward_pairs",
+      "value": {
+        "OLIST: CAPTURED -> AUTHORIZED": 1132,
+        "OLIST: CAPTURED -> INITIATED": 166,
+        "OLIST: SETTLED -> AUTHORIZED": 61,
+        "OLIST: SETTLED -> CAPTURED": 23
+      },
+      "severity": "INFO",
+      "detail": "most frequent backward transitions"
+    },
+    {
+      "dimension": "status_transitions",
+      "table": "fact_payment_status",
+      "column": "status",
+      "metric": "skipped_transitions",
+      "value": 2520,
+      "fraction": 0.008589,
+      "severity": "MEDIUM",
+      "detail": "an intermediate state has no event (missing timestamp), so the jump looks illegal"
+    },
+    {
+      "dimension": "status_transitions",
+      "metric": "top_skipped_pairs",
+      "value": {
+        "OLIST: AUTHORIZED -> SETTLED": 1313,
+        "OLIST: INITIATED -> CAPTURED": 1207
+      },
+      "severity": "INFO",
+      "detail": "most frequent skipped transitions"
+    },
+    {
+      "dimension": "status_transitions",
+      "table": "fact_payment_status",
+      "column": "status",
+      "metric": "transitions_checked",
+      "value": 293415,
+      "severity": "INFO",
+      "detail": "consecutive lifecycle event pairs evaluated"
+    }
+  ]
+}

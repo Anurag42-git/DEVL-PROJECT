@@ -1,311 +1,136 @@
-# Transaction Anomaly and Refund Investigation
+# Transaction Anomaly & Refund Investigation
 
-**DEVL — Semester 5 · Experiment 11 (capstone)**
-A payment-monitoring application that reconciles transaction and refund events,
-validates them, scores them with explainable rules, and routes unusual patterns
-to a human review queue.
-
-> **No record in this system is ever labelled "fraud".** The output is always
-> *flagged for review*, with the evidence that triggered it and an outcome of
-> `PENDING`, `CLEARED` or `ESCALATED`.
+**DEVL · Semester 5 · Experiment 11 — Final Submission**
 
 ---
 
-## Problem statement
+## 1. The problem statement
 
 An online payment service has transaction, customer, merchant, refund,
-payment-status and device-summary files. Duplicate events, retries and partial
-refunds make it difficult to distinguish routine activity from records
-requiring investigation.
+payment-status and device-summary files. **Duplicate events, retries and partial
+refunds** make it hard to distinguish routine activity from records that need
+investigation.
 
 Build a monitoring application that:
 
-1. Reconciles transaction/refund events **without double-counting retries or
-   partial refunds**
+1. Reconciles transaction/refund events **without double-counting** retries or partial refunds
 2. Validates **amounts, timestamps, status transitions and transaction references**
-3. Calculates indicators: **transaction frequency per time window, refund ratio,
-   repeated failed attempts**
-4. Shows **why each record was flagged** and retains a review outcome, without
-   ever confirming fraud
+3. Calculates **transaction frequency per time window, refund ratio and repeated failed attempts**
+4. Shows **why** each record was flagged, keeps a review outcome, and **never labels an alert as confirmed fraud**
 
-**Expected outputs:** transaction dashboard · reconciled payment ledger ·
-explainable review queue · audit report.
+> **Important:** the "monitoring application" required here **is the dashboard**.
+> No separate CRUD app is needed.
 
 ---
 
-## Datasets (real, public, verifiable)
+## 2. Expected outcomes — where to find each one
 
-No single public dataset contains all six required files, so the system is
-modelled as a **payment service provider (PSP)** that ingests heterogeneous
-merchant settlement feeds plus a card-network authorisation feed. This is the
-real shape of a PSP's data landscape.
-
-| Dataset | Source | Size | Contributes |
+| # | Expected outcome | Delivered as | How to view |
 |---|---|---|---|
-| **Olist Brazilian E-Commerce** | [Kaggle](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) | 99,441 orders · 3,095 sellers | customers, merchants, **order status lifecycle** (5 real timestamps), multi-attempt payments |
-| **Online Retail II** | [UCI](https://archive.ics.uci.edu/dataset/502/online+retail+ii) | 1,067,371 invoice lines | **authentic refunds** — 22,950 return lines, true partial refunds |
-| **IEEE-CIS Fraud Detection** | [Kaggle](https://www.kaggle.com/c/ieee-fraud-detection) | 590,540 transactions · 144,233 with identity | **device fingerprints** + real `isFraud` labels for objective evaluation |
+| 1 | **Transaction dashboard** | `dashboard/app.py` | `streamlit run dashboard/app.py` |
+| 2 | **Reconciled payment ledger** | `data/output/reconciled_ledger.parquet` / `.csv` | Dashboard → *Reconciled ledger* |
+| 3 | **Explainable review queue** | `data/output/review_queue.parquet` / `.csv` | Dashboard → *Review queue* |
+| 4 | **Audit report** | `docs/audit_report.md` | Dashboard → *Audit report* |
 
-Verified inventory (run `python -m src.ingestion.verify_raw`):
-
-```
-olist/customers              99,441     olist/sellers                 3,095
-olist/orders                 99,441     olist/payments              103,886
-olist/items                 112,650     online_retail_II          1,067,371
-ieee/train_transaction      590,540     ieee/train_identity         144,233
-```
-
-### What the labels actually say
-
-| Finding | Value |
-|---|---|
-| Fraud rate, all IEEE-CIS transactions | 3.499% (20,663 / 590,540) |
-| Fraud rate, transactions with device identity | 7.85% |
-| Fraud rate, device shared vs not shared | 7.91% vs 7.25% (**1.09×**) |
-
-The 2.2× gap is driven by **identity coverage**, not by device sharing. Device
-sharing alone is a weak standalone signal — which is precisely why the rule
-engine combines indicators rather than trusting any single rule.
-
-### Why these three
-
-- **Olist** is the only source with a genuine multi-step status lifecycle
-  (`created → approved → invoiced → shipped → delivered / canceled`), which is
-  required to validate *status transitions*.
-- **Online Retail II** is the only source with *authentic* returns. A return of
-  2 units out of 5 is a real partial refund — not a simulated one. This is the
-  core of the investigation.
-- **IEEE-CIS** provides real device fingerprints and real fraud labels, so
-  detection quality can be **measured** rather than asserted.
-
-### Licence / attribution
-
-- Olist — CC BY-NC-SA 4.0
-- Online Retail II — Chen, D. (2012), UCI ML Repository, CC BY 4.0
-- IEEE-CIS — Kaggle competition data, Vesta Corporation
+The dashboard has six sections: **Overview**, **Reconciled ledger**, **Review queue**,
+**Data quality**, **Audit report** and **About** (which restates the problem and
+maps it to the outcomes). Sections have shareable links, e.g.
+`?page=Review+queue`.
 
 ---
 
-## Canonical model
+## 3. Datasets (real, public, verifiable)
 
-Three schemas that share no keys or vocabularies are normalised into six tables
-(`src/ingestion/schema.py`). Every fact row carries `source_system`, because
-cross-source reconciliation is meaningless — different merchants, currencies
-and ledgers.
+| Dataset | Source | Size | Role |
+|---|---|---|---|
+| Olist Brazilian E-Commerce | [Kaggle](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) | 99,441 orders · 3,095 sellers | customers, merchants, real status lifecycle |
+| Online Retail II | [UCI](https://archive.ics.uci.edu/dataset/502/online+retail+ii) | 1,067,371 invoice lines | authentic partial returns and cancellations |
+| IEEE-CIS Fraud Detection | [Kaggle](https://www.kaggle.com/c/ieee-fraud-detection) | 590,540 transactions | device fingerprints, ground-truth labels |
 
-| Table | Purpose |
-|---|---|
-| `dim_customer` | unified customer dimension |
-| `dim_merchant` | unified merchant dimension |
-| `dim_device` | device fingerprints + shared-device flags |
-| `fact_transaction` | one row per **payment attempt** |
-| `fact_refund` | one row per refund event (partial or full) |
-| `fact_payment_status` | lifecycle event stream (status transitions) |
+No single public file has all six source types, so the system is framed as a
+**payment service provider** ingesting multiple merchant settlement feeds plus a
+card-network authorisation feed — the real shape of a PSP's data landscape.
 
-### The three traps this project exists to solve
-
-All three are present in the real data — verified, not assumed.
-
-**1. Duplicate event records (the "retry" trap).**
-Online Retail II contains **34,335 duplicate invoice lines (3.2%)** — including a
-known sheet overlap for 1–9 Dec 2010. Loading naively with `SUM()` overstates
-revenue. The pipeline must collapse exact duplicates
-(`idempotency_key + amount + timestamp`) while *keeping* legitimate repeat lines.
-
-**2. Multi-leg payments must be summed, not deduplicated.**
-2,961 Olist orders were paid with 2+ instruments (up to 29 legs: vouchers +
-card). These legs are **additive** — verified: 99.4% sum exactly to the order
-total. A naive "one payment per order" rule understates collected revenue.
-The reconciliation must therefore *distinguish* a duplicate from a second leg:
-
-```
-order_id      leg   channel       amount
-...b3577b     1     credit_card     4.88
-...b3577b     2     voucher        40.46
-...b3577b     3     voucher        40.46
-              total = 85.80  == order total  (legitimate, keep all)
-```
-
-264 orders have payments exceeding the order total and 39 have payments below
-it — those are genuine discrepancies the rules engine flags.
-
-**3. Partial refunds are additive and must be capped.**
-Refunds are individual rows. Total refunded is their sum, capped at the
-transaction amount. Current data: **10,600 PARTIAL + 9,493 FULL** refunds.
+Attribution: Olist (CC BY-NC-SA 4.0) · Online Retail II, Chen 2012 (CC BY 4.0) ·
+IEEE-CIS / Vesta Corporation (Kaggle competition data).
 
 ---
 
-## Architecture
+## 4. Pipeline
 
 ```
-data/raw/ ──► src/ingestion/ ──► data/staging/ ──► src/reconcile/ ──► ledger
- (3 sources)   adapters +          Parquet          retry collapse
-               canonical          (6 tables)        refund capping
-                 │
-                 ├──► src/quality/    Experiment 2 - data quality report
-                 ├──► src/rules/      rule engine R001..R015 (explainable)
-                 ├──► src/indicators/ velocity, refund ratio, failed streaks
-                 ├──► src/db/         PostgreSQL (Exp 5,7) + MongoDB (Exp 8,9)
-                 ├──► src/spark/      PySpark aggregation (Exp 10)
-                 ├──► src/api/        FastAPI: case CRUD + audit trail (Exp 3,6,9)
-                 └──► dashboard/      Streamlit (Exp 3)
+raw CSV/XLSX (3 sources)
+      │
+      ▼
+src/ingestion/           → canonical 6-table model in data/staging/
+src/quality/assess.py    → Experiment 2: measured defects
+src/reconcile/ledger.py  → one row per payment intent, refunds capped
+src/rules/engine.py      → 15 explainable rules → review queue
+src/audit_report.py      → audit report
+      │
+      ▼
+dashboard/app.py         → the four outcomes, presented
 ```
 
-## Experiment → module map
+Canonical model: `dim_customer`, `dim_merchant`, `dim_device`,
+`fact_transaction`, `fact_refund`, `fact_payment_status`.
 
-| Exp | Experiment | Where it lives |
-|---|---|---|
-| 1 | Data ingestion | `src/ingestion/` — 3 adapters → canonical model |
-| 2 | Data quality assessment | `src/quality/` |
-| 3 | API integration & visualization | `src/api/` + `dashboard/` |
-| 4 | ETL pipeline development | `src/etl/` (idempotent, watermark-driven) |
-| 5 | PostgreSQL setup & loading | `sql/schema.sql` + `src/db/postgres.py` |
-| 6 | Employee CRUD system | repurposed → **review case CRUD** |
-| 7 | SQL data pipeline | `sql/queries/` — window functions, as-of joins |
-| 8 | MongoDB PyMongo operations | `src/db/mongo.py` — evidence + raw events |
-| 9 | MongoDB application development | case notes, audit trail |
-| 10 | DataFrame in PySpark | `src/spark/` |
-| 11 | **This capstone** | integrates all of the above |
+### The two reconciliation traps
+
+- **Payment legs are additive.** 2,961 Olist orders were paid with 2+ instruments
+  (up to 29 legs). Verified: 99.4% sum exactly to the order total. They must be
+  **summed**, not deduplicated.
+- **Refunds are additive and must be capped.** Total refunded is the sum of
+  individual refunds, capped at the amount collected. Raw **795,669 → capped
+  620,696**, removing **174,972** of over-refunding.
 
 ---
 
-## Quality snapshot (Experiment 2)
-
-`python -m src.quality.assess` → `docs/quality_report.md`
-
-| Severity | Findings |
-|---|---|
-| HIGH | 4 |
-| MEDIUM | 2 |
-| INFO | 17 |
-| OK | 12 |
-
-The four high-severity defects, all genuine:
-
-| Finding | Value | Meaning |
-|---|---|---|
-| Refunds exceeding the transaction | **153** | refunded more than was ever collected |
-| Backward status transitions | **1,382** | lifecycle moved to an *earlier* state — timestamps contradict the process |
-| Non-positive transaction amounts | **1,875** | zero-price invoices (free items aggregated to 0) |
-| Orphan refund → customer | **128** | refund for a customer absent from the dimension |
-
-Plus **2,520 skipped transitions** (a missing intermediate timestamp makes a
-legitimate jump look illegal) and **320** status events for orders that never
-produced a payment record.
-
-> Deliberately **not** counted as defects: 615 legs sharing the same intent,
-> amount and timestamp. These are legitimate identical vouchers, and treating
-> them as duplicates would wrongly erase real money.
-
----
-
-## Reconciled ledger (Experiment 4 / 7)
-
-`python -m src.reconcile.ledger` → `data/output/reconciled_ledger.{parquet,csv}`
+## 5. Results
 
 | Metric | Value |
 |---|---|
-| Payment legs in | 736,370 |
-| Exact duplicate rows dropped | 0 |
-| **Payment intents out** | **731,924** |
+| Payment intents reconciled | 731,924 |
 | Multi-leg intents | 2,961 |
 | Intents with refunds | 8,612 |
-| Refund states | PARTIAL 6,766 · FULL 707 · **OVER 57** · NONE 724,394 |
-| Raw refund total | 795,668.59 |
-| **Capped refund total** | **620,696.18** |
-| Backward transitions | 1,369 intents |
-| Skipped transitions | 1,383 intents |
+| Refund states | PARTIAL 6,766 · FULL 707 · OVER 57 · NONE 724,394 |
+| Backward status transitions | 1,369 intents |
+| Skipped status transitions | 1,383 intents |
 | Olist amount mismatches | 303 |
-| **Intents needing review** | **1,720** |
+| Review flags | 153,780 across 146,966 intents, all `PENDING` |
+| Data quality | 4 HIGH · 2 MEDIUM · 17 INFO · 12 OK |
 
-The cap removed **174,972.41** of refunds that exceeded what was collected.
-This is the concrete demonstration of "reconcile without double-counting
-partial refunds".
-
-> **Caveat (documented, not hidden):** Online Retail II has no explicit
-> "refund of invoice X" column. The refund→transaction link is reconstructed
-> with an *as-of join* on (customer, stock code). It is usually right — e.g.
-> cancellation `C508132` maps to sale `508096`, 36 invoices earlier — but some
-> cancellation invoices exceed the matched sale because one cancellation spans
-> several purchases. The 57 `OVER` flags are therefore **provisional review
-> candidates**, not confirmed defects. Non-product stock codes (`AMAZONFEE`,
-> `POST`, `M`, …) were excluded from refund matching after they created fake
-> 127k over-refunds.
+Every flag records `rule_id`, `severity`, `evidence` (the actual numbers), a
+human-readable `reason`, and `outcome = PENDING`. No record is ever called fraud.
 
 ---
 
-## Quick start
+## 6. Run it
 
 ```powershell
-# 1. install
 python -m pip install -r requirements.txt
 
-# 2. verify the raw files are present
-python -m src.ingestion.verify_raw
-
-# 3. build the canonical staging tables
-python -m src.ingestion.build_canonical
-python -m src.quality.assess
-python -m src.reconcile.ledger
-python -m src.rules.engine
-python -m src.audit_report
-streamlit run dashboard/app.py
+python -m src.ingestion.verify_raw          # inventory of the raw datasets
+python -m src.ingestion.build_canonical     # ingest + unify
+python -m src.quality.assess                # Experiment 2 report
+python -m src.reconcile.ledger              # outcome 2
+python -m src.rules.engine                  # outcome 3
+python -m src.audit_report                  # outcome 4
+streamlit run dashboard/app.py              # outcome 1
 ```
 
-Expected output:
-
-```
-dim_customer               118,876
-dim_merchant                 3,097
-dim_device                   9,705   real composite device fingerprints
-fact_transaction           736,370   IEEE 590,540 | Olist 103,886 | OR-II 41,944
-fact_refund                 22,980   OR-II 22,496 | Olist 484
-fact_payment_status      1,025,340
-eval_labels                590,540   20,663 positives (3.499%) - evaluation only
-
-payment intents with >1 leg     : 2,961 of 731,924
-refund types                    : PARTIAL=10,600, FULL=9,493, UNKNOWN=2,887
-```
-
-### Verified data characteristics
-| Finding | Value |
-|---|---|
-| Olist orders paid with 2+ instruments | 2,961 (up to 29 legs) |
-| Olist legs summing exactly to order total | 99.4% |
-| Olist payments exceeding order total | 264 |
-| Olist payments below order total | 39 |
-| Duplicate invoice lines in Online Retail II | 34,335 (3.2%) |
-| Genuine partial refunds recovered | 10,600 |
+For the hosted dashboard, only `dashboard/requirements.txt` is needed.
+`src/make_demo.py` produces a small **representative sample of real rows** in
+`data/demo/` for Streamlit Cloud, because the full outputs are git-ignored.
 
 ---
 
-## Status
+## 7. Documented limitations
 
-- [x] Project scaffold, config, dependency pinning
-- [x] Dataset selection + verification tooling (`verify_raw`)
-- [x] Olist adapter → canonical model
-- [x] Online Retail II adapter → canonical model (as-of join for refund linkage)
-- [x] IEEE-CIS adapter → device fingerprints + `eval_labels` (leakage-isolated)
-- [x] Canonical build + Parquet caching (346s → 25s on re-run)
-- [x] **Experiment 2 — data quality report** (`docs/quality_report.md`)
-- [x] **Reconciled ledger** (`src/reconcile/ledger.py`)
-- [x] Explainable rule engine + review queue
-- [ ] PostgreSQL schema + load (optional for demo)
-- [ ] MongoDB evidence store (optional for demo)
-- [ ] FastAPI case CRUD (optional for demo)
-- [x] Streamlit dashboard
-- [ ] PySpark indicator job (optional for demo)
-- [x] Audit report
-
-### Known data gaps (measured, not hidden)
-
-| Gap | Source | Handling |
-|---|---|---|
-| No device info | Olist, Online Retail II | `device_id` empty; device coverage is 24.4% from IEEE-CIS |
-| No cancellation timestamp | Olist | `processed_ts` left null, reported in Exp 2 |
-| 243,007 rows missing Customer ID | Online Retail II | keyed as `ORII_UNKNOWN`, counted |
-| 2,887 refunds with no matching sale | Online Retail II | `refund_type = UNKNOWN`, reported not guessed |
-| No lifecycle stream | Online Retail II | only `INITIATED` is real; settlement not invented |
-| `DeviceInfo` is a family, not an ID | IEEE-CIS | composite fingerprint (family+OS+browser+resolution) |
-| `isFraud` is post-hoc truth | IEEE-CIS | isolated in `eval_labels`, never a feature |
-| No explicit refund→txn link | Online Retail II | as-of join; 57 `OVER` flags are provisional review candidates |
+| Limitation | Handling |
+|---|---|
+| Online Retail II has no explicit refund→transaction link | reconstructed with an as-of join; 57 `OVER` flags are provisional review candidates |
+| Device identity on only 24.4% of card transactions | `device_id` is empty elsewhere, never invented |
+| `isFraud` is post-hoc truth | isolated in `eval_labels`, joined only **after** flags are produced |
+| Olist has no cancellation timestamp | `refund.processed_ts` left null and reported in the quality report |
+| Non-product stock codes (`AMAZONFEE`, `POST`, …) | excluded from refund matching after they created fake 127k over-refunds |

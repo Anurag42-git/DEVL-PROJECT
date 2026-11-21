@@ -1,0 +1,35 @@
+{
+  "generated_at": "2026-11-20T02:55:16Z",
+  "total_flags": 153780,
+  "distinct_intents_flagged": 146965,
+  "by_rule": {
+    "R012": 130074,
+    "R009": 13824,
+    "R001": 2961,
+    "R003": 2361,
+    "R007": 1874,
+    "R004": 1369,
+    "R014": 775,
+    "R013": 484,
+    "R002": 57,
+    "R011": 1
+  },
+  "by_severity": {
+    "LOW": 130074,
+    "MEDIUM": 14600,
+    "HIGH": 6145,
+    "INFO": 2961
+  },
+  "evaluation": {
+    "note": "Flags are rule-based review candidates, not fraud predictions. is_fraud is joined only AFTER flagging (no leakage).",
+    "labelled_intents": 139078,
+    "flagged_intents": 139078,
+    "true_positives": 10445,
+    "false_positives": 128633,
+    "false_negatives": 0,
+    "true_negatives": 0,
+    "precision": 0.0751,
+    "recall": 1.0,
+    "f1": 0.1397
+  }
+}

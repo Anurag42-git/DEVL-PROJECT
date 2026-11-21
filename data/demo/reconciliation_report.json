@@ -1,0 +1,37 @@
+{
+  "generated_at": "2026-11-20T02:40:41Z",
+  "ledger_rows": 731924,
+  "stats": {
+    "leg_rows_in": 736370,
+    "exact_duplicate_rows_dropped": 0,
+    "payment_intents_out": 731924,
+    "multi_leg_intents": 2961,
+    "intents_with_nonpositive_leg": 1874,
+    "refund_rows_in": 21828,
+    "unmatched_refund_rows": 2361,
+    "intents_with_refund": 8612,
+    "over_refunded_intents": 57,
+    "fully_refunded_intents": 707,
+    "partially_refunded_intents": 6766,
+    "refunded_amount_raw_total": 795668.59,
+    "refunded_amount_capped_total": 620696.18,
+    "intents_with_backward_transition": 1369,
+    "intents_with_skipped_transition": 1383,
+    "olist_amount_mismatches": 303
+  },
+  "amount_summary": {
+    "collected_total_by_source": {
+      "IEEE_CIS": 79738946.52,
+      "OLIST": 16008872.12,
+      "ONLINE_RETAIL_II": 20317957.86
+    },
+    "refunded_raw_total": 795668.59,
+    "refunded_capped_total": 620696.18
+  },
+  "refund_state_counts": {
+    "NONE": 724394,
+    "PARTIAL": 6766,
+    "FULL": 707,
+    "OVER": 57
+  }
+}
