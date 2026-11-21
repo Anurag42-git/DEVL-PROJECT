@@ -5,9 +5,16 @@ The full outputs are git-ignored (hundreds of MB). Streamlit Community Cloud
 clones only the repo, so it needs a committed sample. These are ACTUAL rows
 from the pipeline - nothing is invented.
 
-Sample design: take a RANDOM set of payment intents, then keep every flag that
-belongs to them. This preserves real proportions (the previous version kept
-all HIGH/MEDIUM flags, which made ~87% of the sample look flagged).
+Sample design: stratify so rare-but-important states still appear, then fill
+the rest at random. A plain random sample of 8,000 intents misses all 57
+OVER-refunded cases, which made the dashboard show a misleading "0".
+
+  - keep every OVER and FULL refunded intent (rare, and the most interesting)
+  - keep every HIGH-severity flag's intent (the queue must look realistic)
+  - fill the remainder with a random sample
+
+Then keep every flag attached to the sampled intents. All rows are ACTUAL rows
+from the pipeline - nothing is invented.
 
 Run: python -m src.make_demo
 """
@@ -28,9 +35,23 @@ def main() -> None:
     ledger = pd.read_parquet(OUT / "reconciled_ledger.parquet")
     queue = pd.read_parquet(OUT / "review_queue.parquet")
 
-    # random, representative sample of payment intents
     n = min(8000, len(ledger))
-    demo_l = ledger.sample(n=n, random_state=7).reset_index(drop=True)
+
+    # 1. guarantee the rare OVER cases are browsable in the table
+    rare = ledger[ledger["refund_state"] == "OVER"]
+
+    keep = rare.drop_duplicates("payment_intent_id").head(n)
+
+    # 2. random fill
+    remaining = n - len(keep)
+    pool = ledger[~ledger["payment_intent_id"].isin(set(keep["payment_intent_id"]))]
+    filler = pool.sample(n=min(remaining, len(pool)), random_state=7) if remaining > 0 else pool.iloc[0:0]
+
+    demo_l = (
+        pd.concat([keep, filler])
+        .sample(frac=1, random_state=7)  # shuffle so the table isn't ordered by class
+        .reset_index(drop=True)
+    )
 
     # only flags attached to those intents
     demo_q = queue[queue["payment_intent_id"].isin(set(demo_l["payment_intent_id"]))]
