@@ -148,19 +148,18 @@ requested = next(
     (p for p in PAGES if p.endswith(requested) or requested in p),
     PAGES[0],
 )
-if st.session_state.get("nav") != requested:
-    st.session_state["nav"] = requested
 
 with st.sidebar:
     st.markdown("## 🔍 Payment Monitor")
     st.caption("Experiment 11 · DEVL Semester 5")
     st.markdown("---")
 
+    # No `key` and no session_state write: Streamlit warns if a widget has both
+    # a default index and a session-state value.
     page = st.radio(
         "Go to",
         PAGES,
-        index=PAGES.index(st.session_state.get("nav", PAGES[0])),
-        key="nav",
+        index=PAGES.index(requested),
         label_visibility="collapsed",
     )
     if st.query_params.get("page") != page:
